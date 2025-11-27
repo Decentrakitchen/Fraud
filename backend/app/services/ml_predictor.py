@@ -5,13 +5,13 @@ from catboost import CatBoostClassifier
 import os
 
 class MLPredictorService:
-    def __init__(self, model_path: str, initial_threshold: float = 0.85, shap_threshold: float = 0.4):
+    def __init__(self, model_path: str, initial_threshold: float = 0.85, shap_threshold: float = 0.5):
         """
         Инициализация сервиса предсказаний.
         
         :param model_path: Путь к файлу обученной модели CatBoost.
         :param initial_threshold: Порог вероятности для блокировки транзакции.
-        :param shap_threshold: Порог вероятности для расчета SHAP-объяснений.
+        :param shap_threshold: Порог вероятности для расчета SHAP-объяснений (по умолчанию 0.5).
         """
         if not os.path.exists(model_path):
             raise FileNotFoundError(f"Model file not found at: {model_path}")

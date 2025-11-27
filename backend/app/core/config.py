@@ -21,6 +21,6 @@ class Settings:
 
     # ML Logic Defaults
     DEFAULT_BLOCK_THRESHOLD: float = 0.85
-    DEFAULT_SHAP_THRESHOLD: float = 0.4
+    DEFAULT_SHAP_THRESHOLD: float = 0.5  # Порог для расчёта SHAP-объяснений
 
 settings = Settings()
