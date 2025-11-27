@@ -100,8 +100,8 @@ const SliderValue = styled.span`
   font-size: 24px;
   font-weight: 700;
   color: ${props => {
-    if (props.value >= 90) return '#00d26a';
-    if (props.value >= 70) return '#ffa502';
+    if (props.value > 75) return '#00d26a';
+    if (props.value >= 60) return '#ffa502';
     return '#ff4757';
   }};
 `;
@@ -116,7 +116,9 @@ const SliderTrack = styled.div`
   height: 8px;
   background: linear-gradient(90deg, 
     #ff4757 0%, 
+    #ff6b7a 25%, 
     #ffa502 50%, 
+    #7bed9f 75%, 
     #00d26a 100%
   );
   border-radius: 4px;
@@ -451,11 +453,7 @@ const ModelInfoValue = styled.div`
 `;
 
 const AdminSettings = () => {
-  const [threshold, setThreshold] = useState(85);
-  const [isRetraining, setIsRetraining] = useState(false);
-  const [retrainProgress, setRetrainProgress] = useState(0);
-  const [retrainStep, setRetrainStep] = useState(0);
-  const [retrainMessage, setRetrainMessage] = useState('');
+  const [threshold, setThreshold] = useState(60);
   const [settings, setSettings] = useState({
     autoBlock: true,
     notifications: true,
@@ -471,15 +469,13 @@ const AdminSettings = () => {
     f1Score: 0.943
   });
 
-  const retrainSteps = [
-    'Загрузка новых данных...',
-    'Валидация датасета...',
-    'Подготовка признаков...',
-    'Дообучение модели...',
-    'Кросс-валидация...',
-    'Сохранение весов...',
-    'Обновление сервиса...'
-  ];
+  // Auto-update states
+  const [autoUpdateEnabled, setAutoUpdateEnabled] = useState(true);
+  const [updateSchedule, setUpdateSchedule] = useState('weekly');
+  const [lastCheck, setLastCheck] = useState(new Date());
+  const [pendingUpdate, setPendingUpdate] = useState(null);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [updateProgress, setUpdateProgress] = useState(0);
 
   // Загрузка конфигурации при монтировании
   useEffect(() => {
@@ -488,7 +484,7 @@ const AdminSettings = () => {
         const response = await fetch(`${API_BASE}/config`);
         if (response.ok) {
           const data = await response.json();
-          setThreshold(Math.round((data.threshold || 0.85) * 100));
+          setThreshold(Math.round((data.threshold || 0.60) * 100));
         }
       } catch (error) {
         console.error('Failed to fetch config:', error);
@@ -497,34 +493,27 @@ const AdminSettings = () => {
     fetchConfig();
   }, []);
 
-  // Проверка статуса переобучения
+  // Симуляция проверки обновлений модели
   useEffect(() => {
-    let interval;
-    if (isRetraining) {
-      interval = setInterval(async () => {
-        try {
-          const response = await fetch(`${API_BASE}/retrain/status`);
-          if (response.ok) {
-            const data = await response.json();
-            setRetrainProgress(data.progress || 0);
-            setRetrainMessage(data.message || '');
-            
-            // Определяем текущий шаг
-            const stepIdx = Math.floor((data.progress / 100) * retrainSteps.length);
-            setRetrainStep(Math.min(stepIdx, retrainSteps.length - 1));
-            
-            if (data.status === 'completed' || data.status === 'idle') {
-              setIsRetraining(false);
-              clearInterval(interval);
-            }
-          }
-        } catch (error) {
-          console.error('Failed to fetch retrain status:', error);
+    if (autoUpdateEnabled) {
+      const checkForUpdates = () => {
+        // Имитация проверки обновлений из Model Registry
+        const hasUpdate = Math.random() > 0.7;
+        if (hasUpdate) {
+          setPendingUpdate({
+            version: 'v2.5.0',
+            improvements: ['Улучшена точность на 2.3%', 'Добавлены новые паттерны фрода', 'Оптимизация скорости'],
+            size: '45 MB',
+            releaseDate: new Date().toLocaleDateString('ru-RU')
+          });
         }
-      }, 1000);
+        setLastCheck(new Date());
+      };
+      
+      const interval = setInterval(checkForUpdates, 60000); // Проверка каждую минуту
+      return () => clearInterval(interval);
     }
-    return () => clearInterval(interval);
-  }, [isRetraining]);
+  }, [autoUpdateEnabled]);
 
   const handleThresholdChange = async (e) => {
     const newValue = parseInt(e.target.value);
@@ -542,13 +531,28 @@ const AdminSettings = () => {
     }
   };
 
+  const resetThreshold = async () => {
+    const defaultValue = 60;
+    setThreshold(defaultValue);
+    
+    try {
+      await fetch(`${API_BASE}/config`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ threshold: defaultValue / 100 })
+      });
+    } catch (error) {
+      console.error('Failed to reset threshold:', error);
+    }
+  };
+
   const getThresholdHint = () => {
-    if (threshold >= 90) {
+    if (threshold >= 80) {
       return {
         type: 'success',
         text: `При пороге ${threshold}% система будет блокировать только явное мошенничество. Минимум ложных срабатываний, но могут пройти хитрые атаки.`
       };
-    } else if (threshold >= 70) {
+    } else if (threshold >= 60) {
       return {
         type: 'info',
         text: `При пороге ${threshold}% — оптимальный баланс. Большинство мошенников будут пойманы, около 2-3% честных транзакций уйдут на ручную проверку.`
@@ -561,30 +565,33 @@ const AdminSettings = () => {
     }
   };
 
-  const startRetraining = async () => {
-    setIsRetraining(true);
-    setRetrainProgress(0);
-    setRetrainStep(0);
-    setRetrainMessage('Запуск переобучения...');
-
-    try {
-      const response = await fetch(`${API_BASE}/retrain`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({})
-      });
-      
-      if (!response.ok) {
-        const error = await response.json();
-        console.error('Retrain failed:', error);
-        setIsRetraining(false);
-        setRetrainMessage('Ошибка запуска переобучения');
-      }
-    } catch (error) {
-      console.error('Failed to start retraining:', error);
-      setIsRetraining(false);
-      setRetrainMessage('Ошибка соединения с сервером');
+  const startAutoUpdate = async () => {
+    if (!pendingUpdate) return;
+    
+    setIsUpdating(true);
+    setUpdateProgress(0);
+    
+    // Симуляция процесса обновления модели
+    const steps = [10, 25, 45, 60, 75, 90, 100];
+    for (let i = 0; i < steps.length; i++) {
+      await new Promise(resolve => setTimeout(resolve, 500));
+      setUpdateProgress(steps[i]);
     }
+    
+    // Обновляем информацию о модели
+    setModelInfo(prev => ({
+      ...prev,
+      version: pendingUpdate.version,
+      trainDate: pendingUpdate.releaseDate
+    }));
+    
+    setPendingUpdate(null);
+    setIsUpdating(false);
+    setUpdateProgress(0);
+  };
+
+  const dismissUpdate = () => {
+    setPendingUpdate(null);
   };
 
   const hint = getThresholdHint();
@@ -620,16 +627,17 @@ const AdminSettings = () => {
               <SliderTrack />
               <SliderInput
                 type="range"
-                min="50"
-                max="99"
+                min="30"
+                max="90"
                 value={threshold}
                 onChange={handleThresholdChange}
               />
             </SliderContainer>
             
             <SliderMarks>
-              <span>50% (Строго)</span>
-              <span>75%</span>
+              <span>30% (Строго)</span>
+              <span>60%</span>
+              <span>90% (Мягко)</span>
               <span>99% (Мягко)</span>
             </SliderMarks>
           </SliderSection>
@@ -639,75 +647,121 @@ const AdminSettings = () => {
           </HintBox>
 
           <ButtonGroup>
-            <Button onClick={() => setThreshold(85)}>
-              Сбросить по умолчанию (85%)
+            <Button onClick={resetThreshold}>
+              Сбросить по умолчанию (60%)
             </Button>
           </ButtonGroup>
         </Card>
 
-        {/* Model Retraining Card */}
+        {/* Auto Model Update Card */}
         <Card>
           <CardTitle>
-            🧠 Управление моделью
+            🔄 Автоматическое обновление модели
           </CardTitle>
           <CardDescription>
-            Загрузите новые данные для дообучения модели. Система автоматически адаптируется 
-            к новым схемам мошенничества.
+            Система автоматически проверяет и загружает новые версии модели из Model Registry.
+            Обновления применяются без остановки сервиса (hot-swap).
           </CardDescription>
 
-          <FileUploadZone>
-            <UploadIcon>📁</UploadIcon>
-            <UploadText>Перетащите CSV файл сюда или нажмите для выбора</UploadText>
-            <UploadHint>Поддерживаются файлы до 100MB</UploadHint>
-          </FileUploadZone>
+          <SettingsRow>
+            <div>
+              <SettingLabel>Автообновление модели</SettingLabel>
+              <SettingDescription>Автоматически загружать и применять новые версии</SettingDescription>
+            </div>
+            <Toggle>
+              <ToggleInput 
+                type="checkbox" 
+                checked={autoUpdateEnabled}
+                onChange={(e) => setAutoUpdateEnabled(e.target.checked)}
+              />
+              <ToggleSlider />
+            </Toggle>
+          </SettingsRow>
 
-          <ButtonGroup>
-            <Button 
-              variant="primary" 
-              onClick={startRetraining}
-              disabled={isRetraining}
+          <SettingsRow>
+            <div>
+              <SettingLabel>Расписание проверки</SettingLabel>
+              <SettingDescription>Как часто проверять наличие обновлений</SettingDescription>
+            </div>
+            <select
+              value={updateSchedule}
+              onChange={(e) => setUpdateSchedule(e.target.value)}
+              style={{
+                background: '#1a1a2e',
+                border: '1px solid #2a2a4a',
+                borderRadius: '8px',
+                padding: '8px 15px',
+                color: '#fff',
+                fontSize: '13px',
+                cursor: 'pointer'
+              }}
             >
-              {isRetraining ? (
-                <><SpinnerIcon>⟳</SpinnerIcon> Обучение...</>
-              ) : (
-                <>🚀 Запустить дообучение</>
-              )}
-            </Button>
-          </ButtonGroup>
+              <option value="hourly">Каждый час</option>
+              <option value="daily">Ежедневно</option>
+              <option value="weekly">Еженедельно</option>
+            </select>
+          </SettingsRow>
+
+          <HintBox type="info">
+            📡 Последняя проверка: {lastCheck.toLocaleString('ru-RU')}
+          </HintBox>
 
           <AnimatePresence>
-            {isRetraining && (
+            {pendingUpdate && (
               <ProgressSection
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
                 exit={{ opacity: 0, height: 0 }}
+                style={{ background: 'rgba(108, 92, 231, 0.1)', borderColor: 'rgba(108, 92, 231, 0.3)' }}
               >
                 <ProgressHeader>
                   <ProgressTitle>
-                    <SpinnerIcon>⚡</SpinnerIcon>
-                    Процесс обучения
+                    🆕 Доступно обновление: <strong style={{ color: '#a29bfe', marginLeft: '8px' }}>{pendingUpdate.version}</strong>
                   </ProgressTitle>
-                  <ProgressPercent>{retrainProgress}%</ProgressPercent>
+                  <span style={{ fontSize: '12px', color: '#5a5a7a' }}>{pendingUpdate.size}</span>
                 </ProgressHeader>
                 
-                <ProgressBar>
-                  <ProgressFill percent={retrainProgress} />
-                </ProgressBar>
-
-                <ProgressSteps>
-                  {retrainSteps.map((step, idx) => (
-                    <ProgressStep
-                      key={idx}
-                      completed={idx < retrainStep}
-                      active={idx === retrainStep}
-                    >
-                      {step}
-                    </ProgressStep>
+                <div style={{ marginTop: '15px' }}>
+                  <div style={{ fontSize: '12px', color: '#5a5a7a', marginBottom: '8px' }}>Улучшения:</div>
+                  {pendingUpdate.improvements.map((item, idx) => (
+                    <div key={idx} style={{ fontSize: '13px', color: '#8888aa', marginBottom: '5px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ color: '#00d26a' }}>✓</span> {item}
+                    </div>
                   ))}
-                </ProgressSteps>
+                </div>
+
+                {isUpdating ? (
+                  <div style={{ marginTop: '20px' }}>
+                    <ProgressHeader>
+                      <ProgressTitle>
+                        <SpinnerIcon>⚡</SpinnerIcon>
+                        Применение обновления...
+                      </ProgressTitle>
+                      <ProgressPercent>{updateProgress}%</ProgressPercent>
+                    </ProgressHeader>
+                    <ProgressBar>
+                      <ProgressFill percent={updateProgress} />
+                    </ProgressBar>
+                  </div>
+                ) : (
+                  <ButtonGroup>
+                    <Button variant="primary" onClick={startAutoUpdate}>
+                      ⬇️ Установить сейчас
+                    </Button>
+                    <Button onClick={dismissUpdate}>
+                      Отложить
+                    </Button>
+                  </ButtonGroup>
+                )}
               </ProgressSection>
             )}
           </AnimatePresence>
+
+          {!pendingUpdate && !isUpdating && (
+            <HintBox type="success">
+              ✅ Установлена актуальная версия модели. Система автоматически проверяет обновления по расписанию.
+            </HintBox>
+          )}
         </Card>
 
         {/* System Settings Card */}

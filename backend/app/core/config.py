@@ -20,7 +20,7 @@ class Settings:
         return os.path.join(self.MODEL_ARTIFACTS_DIR, self.MODEL_FILE_NAME)
 
     # ML Logic Defaults
-    DEFAULT_BLOCK_THRESHOLD: float = 0.85
+    DEFAULT_BLOCK_THRESHOLD: float = 0.60
     DEFAULT_SHAP_THRESHOLD: float = 0.5  # Порог для расчёта SHAP-объяснений
 
 settings = Settings()
