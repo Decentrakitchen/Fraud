@@ -92,7 +92,7 @@ class MLPredictorService:
         for name, value, shap_val in zip(feature_names, feature_values, shap_values):
             features_info.append({
                 "feature_name": str(name),
-                "feature_value": float(value) if isinstance(value, (int, float, np.number)) else str(value),
+                "feature_value": str(value),  # Всегда преобразуем в строку
                 "shap_value": float(shap_val)
             })
             

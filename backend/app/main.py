@@ -3,9 +3,9 @@ from fastapi import FastAPI, HTTPException
 from typing import List
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.core.config import settings
-from app.services import MLPredictorService, StatsService
-from app.json_models import (
+from core.config import settings
+from services import MLPredictorService, StatsService
+from json_models import (
     TransactionInput, 
     BatchPredictionResult, 
     ConfigUpdate
@@ -65,9 +65,13 @@ def predict_transactions(transactions: List[TransactionInput]):
         
     df = pd.DataFrame(data)
     
+    # Удаляем transaction_id, так как это не признак модели
+    feature_columns = [col for col in df.columns if col != 'transaction_id']
+    features_df = df[feature_columns]
+    
     # Скоринг
     try:
-        results = ml_service.score_batch(df)
+        results = ml_service.score_batch(features_df)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Prediction error: {str(e)}")
     

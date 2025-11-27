@@ -319,31 +319,44 @@ const ShapBar = styled(motion.div)`
 // --- Mock Data Generator ---
 const generateMockTransaction = (id) => {
   const isFraud = Math.random() > 0.8;
+  const amount = Math.round(Math.random() * 50000) + 1000;
+  const hourOfDay = Math.floor(Math.random() * 24);
+  const dayOfWeek = Math.floor(Math.random() * 7);
+  const isNight = (hourOfDay >= 22 || hourOfDay < 6) ? 1 : 0;
+  const isWeekend = (dayOfWeek >= 5) ? 1 : 0;
+  const loginsLast7Days = Math.floor(Math.random() * 20) + 1;
+  const loginsLast30Days = loginsLast7Days + Math.floor(Math.random() * 50);
+  const avgLoginInterval30d = Math.random() * 100 + 1;
+  const stdLoginInterval30d = Math.random() * 50;
+  
   return {
     transaction_id: id,
-    amount: Math.round(Math.random() * 50000) + 1000,
-    direction: Math.random() > 0.5 ? "OUTBOUND" : "INBOUND",
-    last_phone_model_categorical: "iPhone 13",
-    os_ver_categorical: "iOS 16.0",
-    os_versions_count_30d: Math.floor(Math.random() * 3) + 1,
-    phone_models_count_30d: Math.floor(Math.random() * 2) + 1,
-    avg_login_freq_7d: Math.random() * 5,
-    avg_login_freq_30d: Math.random() * 4,
-    std_login_interval_30d: Math.random() * 1000,
-    login_freq_change_ratio: Math.random() * 2,
-    login_share_7d_30d: Math.random(),
-    // Additional fields required by backend schema
-    unique_ips_count_7d: Math.floor(Math.random() * 5) + 1,
-    unique_ips_count_30d: Math.floor(Math.random() * 10) + 1,
-    device_change_count_30d: isFraud ? Math.floor(Math.random() * 5) : 0,
-    location_change_count_30d: isFraud ? Math.floor(Math.random() * 3) : 0,
-    night_activity_share_30d: isFraud ? Math.random() : 0.1,
-    avg_transaction_speed_7d: Math.random() * 60,
-    amount_ratio_avg_30d: isFraud ? (Math.random() * 5) + 2 : 1.0,
-    failed_login_count_7d: isFraud ? Math.floor(Math.random() * 5) : 0,
-    failed_login_count_30d: isFraud ? Math.floor(Math.random() * 10) : 0,
-    days_since_password_change: Math.random() * 365,
-    is_proxy_detected: isFraud && Math.random() > 0.5 ? 1 : 0
+    // Model features (25 total)
+    amount: amount,
+    log_amount: Math.log(amount + 1),
+    hour_of_day: hourOfDay,
+    day_of_week: dayOfWeek,
+    is_night: isNight,
+    is_weekend: isWeekend,
+    is_month_end: Math.random() > 0.9 ? 1 : 0,
+    is_month_start: Math.random() > 0.9 ? 1 : 0,
+    monthly_os_changes: isFraud ? Math.floor(Math.random() * 5) + 1 : Math.floor(Math.random() * 2),
+    monthly_phone_model_changes: isFraud ? Math.floor(Math.random() * 3) + 1 : 0,
+    logins_last_7_days: loginsLast7Days,
+    logins_last_30_days: loginsLast30Days,
+    login_frequency_7d: loginsLast7Days / 7,
+    login_frequency_30d: loginsLast30Days / 30,
+    freq_change_7d_vs_mean: isFraud ? Math.random() * 3 + 1 : Math.random(),
+    logins_7d_over_30d_ratio: loginsLast30Days > 0 ? loginsLast7Days / loginsLast30Days : 0,
+    avg_login_interval_30d: avgLoginInterval30d,
+    std_login_interval_30d: stdLoginInterval30d,
+    ewm_login_interval_7d: avgLoginInterval30d * (0.8 + Math.random() * 0.4),
+    burstiness_login_interval: stdLoginInterval30d / (avgLoginInterval30d + 1),
+    zscore_avg_login_interval_7d: isFraud ? Math.random() * 3 : Math.random() - 0.5,
+    is_cold_start: Math.random() > 0.95 ? 1 : 0,
+    os_family: ["iOS", "Android", "Windows", "macOS"][Math.floor(Math.random() * 4)],
+    phone_brand: ["Apple", "Samsung", "Xiaomi", "Huawei", "Google"][Math.floor(Math.random() * 5)],
+    direction: Math.random() > 0.5 ? "OUTBOUND" : "INBOUND"
   };
 };
 
